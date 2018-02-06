@@ -2,7 +2,6 @@ from sklearn.cluster import DBSCAN
 from HACluster import Clusterer
 import datetime
 import numpy as np
-
 class Pattern:
     _accepted_methods = {'density' : DBSCAN, 'disk' : Clusterer}
     
@@ -43,32 +42,26 @@ class Pattern:
     
     def accepted_methods(self):
         return self._accepted_methods
-
 class Group(Pattern):
     def __init__(self, g):
         super().__init__(2, 1, 2, g, 'disk')
         self._accepted_methods = {'disk' : self._accepted_methods['disk']}
-
 class Flock(Pattern):
     def __init__(self, m, k):
         super().__init__(m, k, k, 1, 'disk')
         self._accepted_methods = {'disk' : self._accepted_methods['disk']}
-
 class Convoy(Pattern):
     def __init__(self, m, k):
         super().__init__(m, k, k, 1, 'density')
         self._accepted_methods = {'density' : self._accepted_methods['density']}
-
 class Swarm(Pattern):
     def __init__(self, m, k, g):
         super().__init__(m, k, 1, g, 'density')
         self._accepted_methods = {'density' : self._accepted_methods['density']}
-
 class Platoon(Pattern):
     def __init__(self, m, k, l, g):
         super().__init__(m, k, l, g, 'density')
         self._accepted_methods = {'density' : self._accepted_methods['density']}
-
 class Candidate:
     def __param_check(self, objects, timestamps, pattern, delta):
         if not isinstance(objects, list):

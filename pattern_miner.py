@@ -6,7 +6,6 @@ from HACluster import Clusterer
 import networkx as nx
 import datetime
 from utills import Candidate, Pattern
-
 class Miner:
     def __init__(self, df, pattern, delta):
         self._df = df
@@ -47,10 +46,10 @@ class Miner:
         return self._graph
     
     # perform clusterization for every unique timestamp
-    def compute_timestamps(self, verbose=False):
+    def compute_timestamps(self, eps=0.001, verbose=False):
         self._timestamps = {}
         if self._pattern.accepted_methods().get(self._pattern.method()) == DBSCAN:
-            db = DBSCAN(eps=0.001, min_samples=2)
+            db = DBSCAN(eps=eps, min_samples=2)
             for s_dt in sorted(self._df['datetime'].unique()):
                 time_set = self._df[['lat', 'long', 'trajectory_id']].loc[self._df['datetime']==s_dt]
                 db.fit(time_set[['lat', 'long']])
@@ -121,7 +120,8 @@ class Miner:
                 for i in range(len(C)):
                     for j in range(i+1, len(C)):
                         cs = Candidate.merge(C[i], C[j])
-                        if cs.obj_length() == level and cs.sim() and cs not in CS:
+                        if cs.obj_length() == level \
+                                and cs.sim() and cs not in CS:
                             CS += [cs]
                 C = CS
                 CR += C
