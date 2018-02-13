@@ -66,7 +66,7 @@ class Candidate:
     def __param_check(self, objects, timestamps, pattern, delta):
         if not isinstance(objects, list):
             raise ValueError(objects)
-        if not isinstance(timestamps, list):
+        if not isinstance(timestamps, (list, np.ndarray)):
             raise ValueError(timestamps)
         if not isinstance(pattern, Pattern):
             raise ValueError(pattern)

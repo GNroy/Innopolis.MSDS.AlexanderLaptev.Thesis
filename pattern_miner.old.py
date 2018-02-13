@@ -68,22 +68,45 @@ class Miner:
         self._timestamps = pd.read_csv(filename, parse_dates=[2], dtype={'cluster': np.int, 'trajectory_id': np.str_})
     
     # get the initial candidate stars
-    def compute_candidate_stars(self, verbose=False):
+    def compute_candidate_stars(self):
         if self._timestamps is None:
             self.compute_timestamps()
-        counter = 0
+        # get multigraph from timestamps
+        def get_graphs(dfs):
+            def add_edges_from_cluster(G, values, timestamp):
+                for i in range(len(values)):
+                    for j in range(i+1, len(values)):
+                        G.add_edge(values[i], values[j], weight=timestamp)
+            G = nx.MultiGraph()
+            for df_key in dfs['datetime'].unique():
+                inner_df = dfs[dfs['datetime']==df_key]
+                for cl in inner_df['cluster'].unique():
+                    add_edges_from_cluster(G, inner_df['trajectory_id'].loc[inner_df['cluster']==cl].values, df_key)
+            return G
+        # merge multigraph to graph
+        def merge_multigraph_to_graph(M):
+            G = nx.Graph()
+            for u, v, data in M.edges_iter(data=True):
+                if 'weight' in data:
+                    w = data['weight']
+                else:
+                     raise ValueError('Invalid multigraph: one of the edges has no weight assigned.')
+                if G.has_edge(u,v):
+                    G[u][v]['weight'] += [w]
+                else:
+                    G.add_edge(u, v, weight=[w])
+            return G
+        G = merge_multigraph_to_graph(get_graphs(self._timestamps))
         self._candidate_stars = []
-        for label in np.sort(self._timestamps['trajectory_id'].unique()):
-            label_df = self._timestamps[self._timestamps['trajectory_id']==label]
-            tuple_list = list(zip(label_df['datetime'], label_df['cluster']))
-            candidates_df = self._timestamps[(self._timestamps['trajectory_id']>label) & (self._timestamps['datetime'].isin(label_df['datetime'])) & (self._timestamps['cluster'].isin(label_df['cluster']))].groupby(['datetime', 'cluster']).filter(lambda x: x.name in tuple_list)[['trajectory_id', 'datetime']]
+        nodes = G.nodes()
+        for n in nodes:
             star = []
-            for other_label in candidates_df['trajectory_id'].unique():
-                star += [Candidate([label, other_label], candidates_df['datetime'][candidates_df['trajectory_id']==other_label].values, self._pattern, self._delta)]
+            for edge in G.edges(n):
+                objs = list(edge)
+                star += [Candidate(objs, G.get_edge_data(objs[0], objs[-1])['weight'], self._pattern, self._delta)]
             self._candidate_stars += [star]
-            counter += 1
-            if verbose:
-                print(counter, label)
+            G.remove_node(n)
+        return self._candidate_stars
     
     # call apriori enumerator to obtain patterns from the stars
     # and transform patterns to more convenient form (group by pattern cardinality)
