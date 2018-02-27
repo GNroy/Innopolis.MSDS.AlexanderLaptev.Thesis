@@ -47,22 +47,26 @@ class Miner:
     
     # perform clusterization for every unique timestamp
     def compute_timestamps(self, eps=0.001, verbose=False):
-        if self._pattern.accepted_methods().get(self._pattern.method()) == DBSCAN:
-            list_df = []
-            db = DBSCAN(eps=eps, min_samples=2)
-            for s_dt in sorted(self._df['datetime'].unique()):
-                time_set = self._df.loc[self._df['datetime']==s_dt].copy()
-                db.fit(time_set[['lat', 'long']])
-                n_clusters_ = len(set(db.labels_)) - (1 if -1 in db.labels_ else 0)
-                if n_clusters_ > 0:
-                    time_set['cluster'] = pd.Series(db.labels_, index=time_set.index)
-                    time_set = time_set.loc[time_set['cluster']>=0]
-                    list_df += [time_set[['trajectory_id', 'cluster', 'datetime']]]
-                if verbose:
-                    print('Time: ' + str(s_dt) + '\nEstimated number of clusters: %d\n' % n_clusters_)
-            self._timestamps = pd.concat(list_df, ignore_index=True)
+        list_df = []
+        pattern_method = self._pattern.accepted_methods().get(self._pattern.method())
+        if pattern_method == DBSCAN:
+            cls = DBSCAN(eps, min_samples=2)
+        elif pattern_method == Birch:
+            cls = Birch(eps, n_clusters=None)
         else:
             raise NotImplementedError()
+        for s_dt in sorted(self._df['datetime'].unique()):
+            time_set = self._df.loc[self._df['datetime']==s_dt].copy()
+            cls.fit(time_set[['lat', 'long']])
+            u, c = np.unique(cls.labels_, return_counts=True)
+            u = u[(c>1)&(u>=0)]
+            if len(u) > 0:
+                time_set['cluster'] = cls.labels_
+                time_set = time_set[time_set['cluster'].isin(u)]
+                list_df += [time_set[['trajectory_id', 'cluster', 'datetime']]]
+            if verbose:
+                print('Time: ' + str(s_dt) + '\nEstimated number of clusters: %d\n' % len(u))
+        self._timestamps = pd.concat(list_df, ignore_index=True)
     
     # load timestamps from .csv file
     def load_timestamps(self, filename):
