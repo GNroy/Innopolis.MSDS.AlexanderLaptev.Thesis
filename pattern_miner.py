@@ -5,6 +5,7 @@ from sklearn.cluster import DBSCAN
 from HACluster import Clusterer
 import networkx as nx
 import datetime
+import json
 from utills import Candidate, Pattern
 class Miner:
     def __init__(self, df, pattern, delta):
@@ -64,8 +65,13 @@ class Miner:
         else:
             raise NotImplementedError()
     
+    # load timestamps from .csv file
     def load_timestamps(self, filename):
         self._timestamps = pd.read_csv(filename, parse_dates=[2], dtype={'cluster': np.int, 'trajectory_id': np.str_})
+    
+    # save timestamps to .csv file
+    def save_timestamps(self, filename):
+        self._timestamps.to_csv(filename, index=False)
     
     # get the initial candidate stars
     def compute_candidate_stars(self, verbose=False):
@@ -84,6 +90,48 @@ class Miner:
             counter += 1
             if verbose:
                 print(counter, label)
+    
+    # load candidate stars from .json file
+    def load_candidate_stars(self, filename):
+        class MyDecoder(json.JSONDecoder):
+            def __init__(self, *args, **kwargs):
+                json.JSONDecoder.__init__(self, object_hook=self.object_hook, *args, **kwargs)
+            def object_hook(self, obj):
+                if '__classname__' in obj:
+                    if obj['__classname__']==Pattern.__name__:
+                        #return Pattern(obj['_m'], obj['_k'], obj['_l'], pd.to_timedelta(obj['_g'], unit='ns'), obj['_method'])
+                        return Pattern(obj['_m'], obj['_k'], obj['_l'], obj['_g'], obj['_method']) # FIX!!!
+                    elif obj['__classname__']==Candidate.__name__:
+                        return Candidate(obj['_objects'], obj['_timestamps'], obj['_pattern'], pd.to_timedelta(obj['_delta'], unit='ns'))
+                    else:
+                        raise ValueError('Unknown classname: %s' % obj['__classname__'])
+                return obj
+        with open(filename, 'r') as infile:
+            self._candidate_stars = json.load(infile, cls=MyDecoder)
+    
+    # save candidate stars to .json file
+    def save_candidate_stars(self, filename):
+        class MyEncoder(json.JSONEncoder):
+            def default(self, obj):
+                if isinstance(obj, (datetime.datetime, datetime.date)):
+                    return int(obj.astype(np.int64))
+                elif isinstance(obj, datetime.timedelta):
+                    return int(obj.to_timedelta64())
+                elif isinstance(obj, Candidate):
+                    o = obj.__dict__
+                    o['__classname__'] = Candidate.__name__
+                    return o
+                elif isinstance(obj, Pattern):
+                    o = obj.__dict__
+                    o['__classname__'] = Pattern.__name__
+                    key = '_accepted_methods' #kludge
+                    if key in o:
+                        del o[key]
+                    return o
+                else:
+                    return super(MyEncoder, self).default(obj)
+        with open(filename, 'w') as outfile:
+            json.dump(self._candidate_stars, outfile, cls=MyEncoder)
     
     # call apriori enumerator to obtain patterns from the stars
     # and transform patterns to more convenient form (group by pattern cardinality)

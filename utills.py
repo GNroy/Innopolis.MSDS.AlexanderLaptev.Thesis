@@ -1,6 +1,6 @@
 from sklearn.cluster import DBSCAN
 from HACluster import Clusterer
-import datetime
+from pandas import Timedelta, to_timedelta
 import numpy as np
 class Pattern:
     _accepted_methods = {'density' : DBSCAN, 'disk' : Clusterer}
@@ -13,7 +13,7 @@ class Pattern:
             elif isinstance(arg, str):
                 if not arg in self._accepted_methods:
                     raise ValueError('Not accepted method: %s' % str(arg))
-            elif not isinstance(arg, datetime.timedelta):
+            elif not isinstance(arg,Timedelta):
                 raise ValueError('Wrong argiment type: %s' % str(type(arg)))
                 
     
@@ -70,15 +70,22 @@ class Candidate:
             raise ValueError(timestamps)
         if not isinstance(pattern, Pattern):
             raise ValueError(pattern)
-        if not isinstance(delta, datetime.timedelta):
+        if not isinstance(delta, Timedelta):
             raise ValueError(delta)
     
     def __init__(self, objects, timestamps, pattern, delta):
         self.__param_check(objects, timestamps, pattern, delta)
         self._objects = objects
-        self._timestamps = np.sort(timestamps).tolist()
+#        if timestamps==[]:
+#            self._timestamps = timestamps
+#        elif isinstance(timestamps[0], int):
+#            self._timestamps = timestamps
+        if timestamps==[] or isinstance(timestamps[0], int):
+            self._timestamps = timestamps
+        else:
+            self._timestamps = timestamps.astype(np.int64).tolist() if isinstance(timestamps, np.ndarray) else [int(a.to_datetime64()) for a in  timestamps]
         self._pattern = pattern
-        self._delta = delta
+        self._delta = int(delta.to_timedelta64())
     
     def __str__(self):
         return 'objects: ' + str(self._objects) + '\ntimestamps: ' + str(self._timestamps)
@@ -104,8 +111,8 @@ class Candidate:
     def pattern(self):
         return self._pattern
     
-    def delta(self):
-        return self._delta
+    def delta(self, raw=False):
+        return self._delta if raw else to_timedelta(self._delta, unit='ns')
     
     @staticmethod
     def _intersection(*args):
@@ -170,19 +177,22 @@ class Candidate:
             for j in range(con_start, len(ts)):
                 self._timestamps.remove(ts[j])
         # remove the L-G-L anomolies
+        if self._timestamps == []:
+            return False
         con_start = 0
-        current_sum = 1
         ts = np.array(self._timestamps)
-        for i in range(self.tst_length()):
-            if ts[i] - ts[i-1] > self._pattern.g():
-                if current_sum < self._pattern.k():
-                    for j in range(con_start, i):
-                        self._timestamps.remove(ts[j])
-                con_start = i
-                current_sum = 1
-            else:
-                current_sum += 1
+        if ts[-1] - ts[0] > self._delta * self._pattern.g():
+            current_sum = 1
+            for i in range(self.tst_length()):
+                if ts[i] - ts[i-1] > self._delta * self._pattern.g():
+                    if current_sum < self._pattern.k():
+                        for j in range(con_start, i):
+                            self._timestamps.remove(ts[j])
+                    con_start = i
+                    current_sum = 1
+                else:
+                    current_sum += 1
         if len(ts) - con_start < self._pattern.k():
             for j in range(con_start, len(ts)):
                 self._timestamps.remove(ts[j])
-        return not (not self._timestamps)
+        return self._timestamps != []
