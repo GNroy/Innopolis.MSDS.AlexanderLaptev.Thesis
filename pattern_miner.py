@@ -1,8 +1,8 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.cluster import DBSCAN
-from HACluster import Clusterer
+from sklearn.cluster import DBSCAN, Birch
+from sklearn.cluster import 
 import networkx as nx
 import datetime
 import json

@@ -1,9 +1,8 @@
-from sklearn.cluster import DBSCAN
-from HACluster import Clusterer
+from sklearn.cluster import DBSCAN, Birch
 from pandas import Timedelta, to_timedelta
 import numpy as np
 class Pattern:
-    _accepted_methods = {'density' : DBSCAN, 'disk' : Clusterer}
+    _accepted_methods = {'density' : DBSCAN, 'disk' : Birch}
     
     def __param_check(self, *args):
         for arg in args:
