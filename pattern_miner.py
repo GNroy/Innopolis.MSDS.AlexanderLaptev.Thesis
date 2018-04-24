@@ -162,26 +162,69 @@ class Miner:
         key_parts = np.array(list(d.keys())).T
         pd.DataFrame({'timestamps': list(d.values()), 'first_key': key_parts[0], 'second_key': key_parts[1]}).groupby('first_key').apply(fill_stars, self._candidate_stars)
     
+    # service function for json decoding
+    def _object_hook(self, obj):
+        if '__classname__' in obj:
+            if obj['__classname__']==Candidate.__name__:
+                return Candidate(obj['_objects'], obj['_timestamps'], self._pattern, self._delta)
+            elif obj['__classname__']==Pattern.__name__:
+                return Pattern(obj['_m'], obj['_k'], obj['_l'], obj['_g'], obj['_method'])
+            else:
+                raise ValueError('Unknown classname: %s' % obj['__classname__'])
+        return obj
+    
     # load candidate stars from .json file
     def load_candidate_stars(self, filename):
+        '''
         class MyDecoder(json.JSONDecoder):
             def __init__(self, *args, **kwargs):
                 json.JSONDecoder.__init__(self, object_hook=self.object_hook, *args, **kwargs)
+                
             def object_hook(self, obj):
                 if '__classname__' in obj:
                     if obj['__classname__']==Pattern.__name__:
                         #return Pattern(obj['_m'], obj['_k'], obj['_l'], pd.to_timedelta(obj['_g'], unit='ns'), obj['_method'])
                         return Pattern(obj['_m'], obj['_k'], obj['_l'], obj['_g'], obj['_method']) # FIX!!!
                     elif obj['__classname__']==Candidate.__name__:
-                        return Candidate(obj['_objects'], obj['_timestamps'], obj['_pattern'], pd.to_timedelta(obj['_delta'], unit='ns'))
+                        #return Candidate(obj['_objects'], obj['_timestamps'], obj['_pattern'], pd.to_timedelta(obj['_delta'], unit='ns'))
+                        return Candidate(obj['_objects'], obj['_timestamps'], self._pattern, self._delta)
                     else:
                         raise ValueError('Unknown classname: %s' % obj['__classname__'])
                 return obj
+        '''
         with open(filename, 'r') as infile:
-            self._candidate_stars = json.load(infile, cls=MyDecoder)
+            #self._candidate_stars = json.load(infile, cls=MyDecoder)
+            self._candidate_stars = json.load(infile, object_hook=self._object_hook)
+    
+    # service function for json encoding
+    def _default(self, obj):
+        if isinstance(obj, (datetime.datetime, datetime.date)):
+            return int(obj.astype(np.int64))
+        elif isinstance(obj, datetime.timedelta):
+            return int(obj.to_timedelta64())
+        elif isinstance(obj, Candidate):
+            o = obj.__dict__
+            keys = ['_pattern', '_delta']
+            for key in keys:
+                if key in o:
+                    del o[key]
+            o['__classname__'] = Candidate.__name__
+            return o
+        elif isinstance(obj, Pattern):
+            o = obj.__dict__
+            o['__classname__'] = Pattern.__name__
+            key = '_accepted_methods' #kludge
+            if key in o:
+                del o[key]
+            return o
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        else:
+            return super(MyEncoder, self).default(obj)
     
     # save candidate stars to .json file
     def save_candidate_stars(self, filename):
+        '''
         class MyEncoder(json.JSONEncoder):
             def default(self, obj):
                 if isinstance(obj, (datetime.datetime, datetime.date)):
@@ -190,6 +233,10 @@ class Miner:
                     return int(obj.to_timedelta64())
                 elif isinstance(obj, Candidate):
                     o = obj.__dict__
+                    keys = ['_pattern', '_delta']
+                    for key in keys:
+                        if key in o:
+                            del o[key]
                     o['__classname__'] = Candidate.__name__
                     return o
                 elif isinstance(obj, Pattern):
@@ -203,8 +250,10 @@ class Miner:
                     return obj.tolist()
                 else:
                     return super(MyEncoder, self).default(obj)
+        '''
         with open(filename, 'w') as outfile:
-            json.dump(self._candidate_stars, outfile, cls=MyEncoder)
+            #json.dump(self._candidate_stars, outfile, cls=MyEncoder)
+            json.dump(self._candidate_stars, outfile, default=self._default)
     
     # call apriori enumerator to obtain patterns from the stars
     # and transform patterns to more convenient form (group by pattern cardinality)
@@ -287,7 +336,7 @@ class Miner:
             heatmap = self._compute_heatmap(self._df[(self._df['trajectory_id']==p.objects()[0]) & (self._df['datetime'].isin(p.timestamps()))])
             connection_rate_matrix[labels[p.objects()[0]], labels[p.objects()[1]]] = len(p.timestamps()) - np.sum(self._sp_map*heatmap)
         connection_rate_matrix = connection_rate_matrix.tocsr()
-        self._connection_rate = {'matrix': connection_rate_matrix, 'labels': np.array(labels[1])}
+        self._connection_rate = {'matrix': connection_rate_matrix, 'labels': np.array(labels.keys())}
     
     # save connection rate to .npz file
     def save_connection_rate(self, filename):

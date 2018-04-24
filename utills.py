@@ -166,7 +166,7 @@ class Candidate:
         # remove the unqualified consecutive parts of timestamps
         con_start = 0
         ts = np.array(self._timestamps)
-        for i in range(self.tst_length()):
+        for i in range(1, len(ts)):
             if ts[i] - ts[i-1] != self._delta:
                 if i - con_start < self._pattern.l():
                     for j in range(con_start, i):
@@ -182,7 +182,7 @@ class Candidate:
         ts = np.array(self._timestamps)
         if ts[-1] - ts[0] > self._delta * self._pattern.g():
             current_sum = 1
-            for i in range(self.tst_length()):
+            for i in range(1, len(ts)):
                 if ts[i] - ts[i-1] > self._delta * self._pattern.g():
                     if current_sum < self._pattern.k():
                         for j in range(con_start, i):
@@ -194,4 +194,4 @@ class Candidate:
         if len(ts) - con_start < self._pattern.k():
             for j in range(con_start, len(ts)):
                 self._timestamps.remove(ts[j])
-        return self._timestamps != []
+        return self.tst_length() >= self._pattern.k()
