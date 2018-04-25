@@ -41,6 +41,15 @@ class Pattern:
     
     def accepted_methods(self):
         return self._accepted_methods
+
+    def override_param_like(self, m, k, l, g, method):
+        self.__param_check(m, k, l, g, method)
+        self._m = m
+        self._k = k
+        self._l = l
+        self._g = g
+        self._method = method
+        
 class Group(Pattern):
     def __init__(self, g):
         super().__init__(2, 1, 2, g, 'disk')

@@ -28,6 +28,9 @@ class Miner:
     
     def pattern(self):
         return self._pattern
+
+    def set_pattern_like(self, other):
+        self._pattern.override_param_like(other.m(), other.k(), other.l(), other.g(), other.method())
     
     def delta(self):
         return self._delta
